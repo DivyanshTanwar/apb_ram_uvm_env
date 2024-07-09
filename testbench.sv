@@ -11,7 +11,7 @@ class apb_config extends uvm_object; // configeration of ENV
     super.new(inst);
   endfunction
   
-  uvm_active_passive_enum is_active = UVM_ACTIVE;
+  uvm_active_passive_enum is_active = UVM_ACTIVE; //setting the agent as active - means it can generate, drive as well as monitor transactions
   
 endclass
 
@@ -46,12 +46,12 @@ class transaction extends uvm_sequence_item;
   `uvm_object_utils_end
   
   
-  constraint addr_c { paddr < 64; }
-  constraint addr_c_err { paddr >= 64; }
+  constraint addr_c { paddr < 64; }	
+  constraint addr_c_err { paddr >= 64; }		//to introduce error in the transactions
   
 endclass
 
-class write_data extends uvm_sequence#(transaction);
+class write_data extends uvm_sequence#(transaction);	//Sequence to write data 15 times in ABP RAM
   
   `uvm_object_utils(write_data)
   
@@ -79,7 +79,7 @@ class write_data extends uvm_sequence#(transaction);
   
 endclass
 
-class read_data extends uvm_sequence#(transaction);
+class read_data extends uvm_sequence#(transaction);		//Sequence to read data 15 times from ABP RAM
   
   `uvm_object_utils(read_data)
   
@@ -106,7 +106,7 @@ class read_data extends uvm_sequence#(transaction);
   
 endclass
 
-class write_read extends uvm_sequence#(transaction);
+class write_read extends uvm_sequence#(transaction);	//Sequence to read and write data 15 times in ABP RAM
   
   `uvm_object_utils(write_read)
   
@@ -140,7 +140,7 @@ class write_read extends uvm_sequence#(transaction);
   
 endclass
 
-class writeb_readb extends uvm_sequence#(transaction);
+class writeb_readb extends uvm_sequence#(transaction);	//Sequence to write data 15 times then read 15 times from APB RAM
   
   `uvm_object_utils(writeb_readb)
   
@@ -181,7 +181,7 @@ class writeb_readb extends uvm_sequence#(transaction);
   
 endclass
 
-class write_err extends uvm_sequence#(transaction);
+class write_err extends uvm_sequence#(transaction);			//Sequence to write error(Address > 64) data 15 times in ABP RAM
   
   `uvm_object_utils(write_err)
   
@@ -208,7 +208,7 @@ class write_err extends uvm_sequence#(transaction);
   
 endclass
 
-class read_err extends uvm_sequence#(transaction);
+class read_err extends uvm_sequence#(transaction); 	//Sequence to read error(Address > 64) data 15 times
   
   `uvm_object_utils(read_err)
   
@@ -235,7 +235,7 @@ class read_err extends uvm_sequence#(transaction);
   
 endclass
 
-class reset_dut extends uvm_sequence#(transaction);
+class reset_dut extends uvm_sequence#(transaction);			//Sequence to reset DUT 15 times
   
   `uvm_object_utils(reset_dut)
   
@@ -274,13 +274,17 @@ class driver extends uvm_driver #(transaction);
   endfunction
   
   virtual function void build_phase(uvm_phase phase);
+    
     super.build_phase(phase);
+    
     trans = transaction :: type_id :: create("trans");
-    if(!uvm_config_db#(virtual apb_if) :: get(this,"","aif",aif))
+    
+    if(!uvm_config_db#(virtual apb_if) :: get(this,"","aif",aif))		//retrieving Virtual interface from TB_TOP
       `uvm_error("Driver", "Unable to Access Interface");
+    
   endfunction
   
-  virtual task reset_dut();
+  virtual task reset_dut();			// Task to reset DUT Before Driving any input
     repeat(5) begin
       
       aif.presetn <= 1'b0;
@@ -297,13 +301,13 @@ class driver extends uvm_driver #(transaction);
   endtask
   
   
-  virtual task drive();
+  virtual task drive();					//Drive Task
     reset_dut();
     forever begin
       
       seq_item_port.get_next_item(trans);
       
-      if(trans.op == rst) begin
+      if(trans.op == rst) begin				//Reset Condition
         
         aif.presetn <= 1'b0;
         aif.paddr <= 'h0;
@@ -315,7 +319,7 @@ class driver extends uvm_driver #(transaction);
         
       end
       
-      else if(trans.op == wr) begin
+      else if(trans.op == wr) begin		//write Condition
         
         aif.presetn <= 1'b1;
         aif.paddr <= trans.paddr;
@@ -331,7 +335,7 @@ class driver extends uvm_driver #(transaction);
           
       end
       
-      else if(trans.op == rd) begin
+      else if(trans.op == rd) begin			//Read Condition
         
         aif.presetn <= 1'b1;
         aif.paddr <= trans.paddr;
@@ -368,25 +372,28 @@ class monitor extends uvm_monitor;
   
   virtual apb_if aif;
   transaction trans;
-  uvm_analysis_port #(transaction) send;
+  uvm_analysis_port #(transaction) send;	
    
   function new (string inst = "monitor", uvm_component parent = null);
     super.new(inst, parent);
   endfunction
   
   virtual function void build_phase(uvm_phase phase);
+    
     super.build_phase(phase);
     trans = transaction :: type_id :: create("trans");
-    if(!uvm_config_db#(virtual apb_if) :: get(this, "", "aif", aif))
+    
+    if(!uvm_config_db#(virtual apb_if) :: get(this, "", "aif", aif))		//retrieving Virtual interface from TB_TOP
       `uvm_error("Monitor", "Unable to Access Interface");   
-    send = new("send",this);
+    
+    send = new("send",this);		//instantiating Analysis Port
   endfunction
   
   virtual task run_phase(uvm_phase phase);
     
     forever begin
       @(posedge aif.pclk);
-      if(!aif.presetn) begin
+      if(!aif.presetn) begin			//	Detecting Reset 
         
         trans.op = rst;
         `uvm_info("Monitor", "SYSTEM RESET DETECTED", UVM_NONE);
@@ -394,7 +401,8 @@ class monitor extends uvm_monitor;
         
       end
       
-      else if(aif.pwrite && aif.presetn) begin
+      else if(aif.pwrite && aif.presetn) begin		//Detecting Write Condition
+        
         @(negedge aif.pready);
         trans.op = wr;
         trans.pwdata = aif.pwdata;
@@ -404,7 +412,7 @@ class monitor extends uvm_monitor;
         send.write(trans);
       end
       
-      else if(!aif.pwrite && aif.presetn) begin
+      else if(!aif.pwrite && aif.presetn) begin		//Detecting Read condition
         
         @(negedge aif.pready);
         trans.op = rd;
@@ -433,19 +441,25 @@ class scoreboard extends uvm_scoreboard;
   endfunction
   
   virtual function void build_phase(uvm_phase phase);
+    
     super.build_phase(phase);
-    rcvd = new("rcvd",this);
+    rcvd = new("rcvd",this);		//instantiating Analysis imp
+    
   endfunction
   
   virtual function void write(transaction trans);
 
-    if(trans.op == rst) begin
+    if(trans.op == rst) begin			// Reset Condition in Scoreboard
       
       `uvm_info("SCO", "System Reset Detected", UVM_NONE);
       
+      for(int i = 0; i < 64 ; i++) begin		// Setting the Golden memory values to 0 on reset
+        mem[i] = 0;
+      end
+      
     end
     
-    else if(trans.op == wr) begin
+    else if(trans.op == wr) begin		// Write Condition in Scoreboard
       
       if(trans.pslverr == 1'b1) begin
         `uvm_info("SCO", "SLV ERROR during WRITE OP", UVM_NONE);
@@ -458,7 +472,7 @@ class scoreboard extends uvm_scoreboard;
       
     end
     
-    else if(trans.op == rd) begin
+    else if(trans.op == rd) begin		// read condition in scoreboard
       
       if(trans.pslverr == 1'b1) begin
         `uvm_info("SCO", "SLV ERROR during READ OP", UVM_NONE);
@@ -496,11 +510,12 @@ class agent extends uvm_agent;
   endfunction
   
   virtual function void build_phase(uvm_phase phase);
+    
     super.build_phase(phase);
     cfg = apb_config :: type_id :: create("cfg");
     mon = monitor :: type_id :: create("mon",this);
 
-    if(cfg.is_active == UVM_ACTIVE) begin
+    if(cfg.is_active == UVM_ACTIVE) begin		// checking if the agent is active to instantiate seqr and driver
       seqr = uvm_sequencer #(transaction) :: type_id :: create("seqr",this);
       drv = driver :: type_id :: create("drv",this);
     end
@@ -509,7 +524,7 @@ class agent extends uvm_agent;
   
   virtual function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
-    if(cfg.is_active == UVM_ACTIVE) begin
+    if(cfg.is_active == UVM_ACTIVE) begin		// connect driver and seqr using seq_item_port if agent is active
       drv.seq_item_port.connect(seqr.seq_item_export);
     end
     
@@ -538,7 +553,7 @@ class env extends uvm_env;
   virtual function void connect_phase(uvm_phase phase);
     
     super.connect_phase(phase);
-      a.mon.send.connect(sco.rcvd);
+    a.mon.send.connect(sco.rcvd);		//connecting monitor and scoreboard using analysis port
     
   endfunction  
   
@@ -562,7 +577,7 @@ class test extends uvm_test;
   
   virtual function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    e = env :: type_id :: create("env",this);
+    e = env :: type_id :: create("env",this);				//instantating all the sequences
     wrrd =  write_read :: type_id :: create("wrrd");
     wdata = write_data :: type_id :: create("wdata");
   	rdata = read_data :: type_id :: create("rdata");
@@ -575,13 +590,13 @@ class test extends uvm_test;
   virtual task run_phase(uvm_phase phase);
     phase.raise_objection(this);
     fork
-      wrrd.start(e.a.seqr,null,100);
+      wrrd.start(e.a.seqr,null,100);		//using default arbitration  UVM_SEQ_ARB_FIFO to run all sequences parallelly
       wrrdb.start(e.a.seqr, null, 200);
       wdata.start(e.a.seqr, null, 300);
       rdata.start(e.a.seqr, null, 400);
       werr.start(e.a.seqr, null, 500);
       rerr.start(e.a.seqr, null, 600);
-//       rstdut.start(e.a.seqr, null, 700);
+      rstdut.start(e.a.seqr, null, 700);
     join 
     phase.drop_objection(this);
   endtask
@@ -595,11 +610,11 @@ module tb_top;
   
   initial aif.pclk <= 0;
   
-  always #10 aif.pclk <= ~aif.pclk;
+  always #10 aif.pclk <= ~aif.pclk;  	// clock generation
   
   initial begin
     
-    uvm_config_db #(virtual apb_if) :: set(null, "*", "aif", aif);
+    uvm_config_db #(virtual apb_if) :: set(null, "*", "aif", aif); // sending the virtual interface to monitor as well as driver
     run_test("test");
     
   end
